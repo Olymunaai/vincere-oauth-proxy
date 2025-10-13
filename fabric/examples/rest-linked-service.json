@@ -1,0 +1,15 @@
+{
+  "name": "VincereOAuthProxy",
+  "type": "Microsoft.DataFactory/factories/linkedservices",
+  "properties": {
+    "description": "REST API connection to Vincere via OAuth proxy",
+    "annotations": [],
+    "type": "RestService",
+    "typeProperties": {
+      "url": "https://YOUR-PROXY-APP.azurewebsites.net/vincere",
+      "enableServerCertificateValidation": true,
+      "authenticationType": "Anonymous"
+    }
+  }
+}
+

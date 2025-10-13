@@ -1,0 +1,145 @@
+name: Deploy to Azure
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - dev
+          - prod
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment || 'prod' }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build application
+        run: npm run build
+
+      - name: Create deployment package
+        run: |
+          cp package*.json dist/
+          cd dist
+          npm ci --production
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+
+      - name: Set environment variables
+        id: vars
+        run: |
+          if [ "${{ github.event.inputs.environment }}" = "dev" ]; then
+            echo "PARAMS_FILE=params.dev.json" >> $GITHUB_OUTPUT
+            echo "ENV_NAME=dev" >> $GITHUB_OUTPUT
+          else
+            echo "PARAMS_FILE=params.prod.json" >> $GITHUB_OUTPUT
+            echo "ENV_NAME=prod" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Deploy infrastructure
+        id: infra
+        uses: azure/arm-deploy@v2
+        with:
+          subscriptionId: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+          resourceGroupName: ${{ secrets.AZURE_RESOURCE_GROUP }}
+          template: ./infra/main.bicep
+          parameters: ./infra/${{ steps.vars.outputs.PARAMS_FILE }}
+          failOnStdErr: false
+
+      - name: Deploy to staging slot
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: ${{ steps.infra.outputs.webAppName }}
+          slot-name: staging
+          package: ./dist
+
+      - name: Wait for staging to warm up
+        run: sleep 30
+
+      - name: Smoke test staging
+        run: |
+          STAGING_URL="${{ steps.infra.outputs.stagingUrl }}"
+          echo "Testing staging URL: $STAGING_URL"
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$STAGING_URL/healthz")
+          echo "Health check response: $RESPONSE"
+          
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Health check failed with status $RESPONSE"
+            exit 1
+          fi
+          
+          echo "Staging deployment healthy"
+
+      - name: Swap staging to production
+        run: |
+          az webapp deployment slot swap \
+            --resource-group ${{ secrets.AZURE_RESOURCE_GROUP }} \
+            --name ${{ steps.infra.outputs.webAppName }} \
+            --slot staging \
+            --target-slot production
+
+      - name: Verify production deployment
+        run: |
+          PROD_URL="${{ steps.infra.outputs.webAppUrl }}"
+          echo "Testing production URL: $PROD_URL"
+          
+          # Wait a bit for slot swap to complete
+          sleep 15
+          
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" "$PROD_URL/healthz")
+          echo "Production health check response: $RESPONSE"
+          
+          if [ "$RESPONSE" != "200" ]; then
+            echo "Production health check failed with status $RESPONSE"
+            echo "Consider rolling back!"
+            exit 1
+          fi
+          
+          echo "Production deployment verified"
+
+      - name: Output deployment details
+        run: |
+          echo "### Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ steps.vars.outputs.ENV_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Web App:** ${{ steps.infra.outputs.webAppName }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Production URL:** ${{ steps.infra.outputs.webAppUrl }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Key Vault:** ${{ steps.infra.outputs.keyVaultName }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Next Steps:**" >> $GITHUB_STEP_SUMMARY
+          echo "1. Set tenant secrets in Key Vault" >> $GITHUB_STEP_SUMMARY
+          echo "2. Complete OAuth authorization flow" >> $GITHUB_STEP_SUMMARY
+          echo "3. Test proxy endpoints" >> $GITHUB_STEP_SUMMARY
+
+      - name: Azure Logout
+        if: always()
+        run: az logout
+

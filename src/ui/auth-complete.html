@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authorization Complete</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      max-width: 500px;
+      width: 100%;
+      padding: 40px;
+      text-align: center;
+    }
+    .checkmark {
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      display: block;
+      stroke-width: 3;
+      stroke: #28a745;
+      stroke-miterlimit: 10;
+      margin: 0 auto 20px;
+      box-shadow: inset 0 0 0 #28a745;
+      animation: fill 0.4s ease-in-out 0.4s forwards, scale 0.3s ease-in-out 0.9s both;
+    }
+    .checkmark__circle {
+      stroke-dasharray: 166;
+      stroke-dashoffset: 166;
+      stroke-width: 3;
+      stroke-miterlimit: 10;
+      stroke: #28a745;
+      fill: none;
+      animation: stroke 0.6s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+    }
+    .checkmark__check {
+      transform-origin: 50% 50%;
+      stroke-dasharray: 48;
+      stroke-dashoffset: 48;
+      animation: stroke 0.3s cubic-bezier(0.65, 0, 0.45, 1) 0.8s forwards;
+    }
+    @keyframes stroke {
+      100% {
+        stroke-dashoffset: 0;
+      }
+    }
+    @keyframes scale {
+      0%, 100% {
+        transform: none;
+      }
+      50% {
+        transform: scale3d(1.1, 1.1, 1);
+      }
+    }
+    @keyframes fill {
+      100% {
+        box-shadow: inset 0 0 0 30px #28a745;
+      }
+    }
+    h1 {
+      color: #333;
+      font-size: 28px;
+      margin-bottom: 12px;
+      font-weight: 600;
+    }
+    p {
+      color: #666;
+      font-size: 16px;
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+    .tenant {
+      background: #f0f0f0;
+      padding: 8px 16px;
+      border-radius: 6px;
+      display: inline-block;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      margin: 10px 0;
+      color: #333;
+    }
+    .info {
+      background: #e7f3ff;
+      border-left: 4px solid #2196F3;
+      padding: 12px;
+      margin-top: 20px;
+      border-radius: 4px;
+      text-align: left;
+      font-size: 14px;
+      color: #555;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <svg class="checkmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 52 52">
+      <circle class="checkmark__circle" cx="26" cy="26" r="25" fill="none"/>
+      <path class="checkmark__check" fill="none" d="M14.1 27.2l7.1 7.2 16.7-16.8"/>
+    </svg>
+    <h1>Authorization Complete</h1>
+    <p>Successfully authorized Vincere tenant</p>
+    <p class="tenant" id="tenant">Loading...</p>
+    <p style="margin-top: 20px; color: #28a745; font-weight: 500;">You can now close this window</p>
+    <div class="info">
+      <strong>Next steps:</strong><br>
+      Your application can now make authenticated requests to the Vincere API through this proxy.
+    </div>
+  </div>
+  <script>
+    // Extract tenant from URL if available
+    const params = new URLSearchParams(window.location.search);
+    const state = params.get('state');
+    if (state && state.includes(':')) {
+      const tenant = state.split(':')[1];
+      document.getElementById('tenant').textContent = tenant;
+    } else {
+      document.getElementById('tenant').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
+

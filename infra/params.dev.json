@@ -1,0 +1,40 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "australiaeast"
+    },
+    "namePrefix": {
+      "value": "vincere-proxy"
+    },
+    "environment": {
+      "value": "dev"
+    },
+    "skuAppServicePlan": {
+      "value": "B1"
+    },
+    "enableStagingSlot": {
+      "value": true
+    },
+    "kvSku": {
+      "value": "standard"
+    },
+    "workspaceSku": {
+      "value": "PerGB2018"
+    },
+    "vincereClientId": {
+      "value": "YOUR_VINCERE_CLIENT_ID"
+    },
+    "vincereRedirectUri": {
+      "value": ""
+    },
+    "allowedIps": {
+      "value": ""
+    },
+    "requirePsk": {
+      "value": false
+    }
+  }
+}
+

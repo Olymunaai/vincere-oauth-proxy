@@ -1,0 +1,292 @@
+{
+  "name": "Vincere_Candidates_Incremental",
+  "properties": {
+    "description": "Incremental load of Vincere candidates via OAuth proxy with pagination",
+    "activities": [
+      {
+        "name": "GetEndpointConfig",
+        "type": "Lookup",
+        "dependsOn": [],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2,
+          "retryIntervalInSeconds": 30
+        },
+        "userProperties": [],
+        "typeProperties": {
+          "source": {
+            "type": "WarehouseSource",
+            "sqlReaderQuery": "SELECT endpoint_key, path, page_size, base_filter_q, incr_field FROM dbo.ingest_endpoints WHERE endpoint_key = 'vincere_candidates'"
+          },
+          "dataset": {
+            "referenceName": "WarehouseControlTables",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "GetWatermark",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "GetEndpointConfig",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "policy": {
+          "timeout": "0.00:05:00",
+          "retry": 2
+        },
+        "typeProperties": {
+          "source": {
+            "type": "WarehouseSource",
+            "sqlReaderQuery": {
+              "value": "SELECT ISNULL(watermark_value, '1900-01-01T00:00:00Z') AS watermark_value FROM dbo.ingest_watermarks WHERE endpoint_key = '@{activity('GetEndpointConfig').output.firstRow.endpoint_key}' AND tenant = '@{pipeline().parameters.tenantHost}'",
+              "type": "Expression"
+            }
+          },
+          "dataset": {
+            "referenceName": "WarehouseControlTables",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "StartIngestRun",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "GetWatermark",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "INSERT INTO dbo.ingest_runs (endpoint_key, tenant, status, pipeline_run_id, watermark_before) VALUES ('@{activity('GetEndpointConfig').output.firstRow.endpoint_key}', '@{pipeline().parameters.tenantHost}', 'running', '@{pipeline().RunId}', '@{activity('GetWatermark').output.firstRow.watermark_value}'); SELECT SCOPE_IDENTITY() AS run_id;",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "PaginationLoop",
+        "type": "Until",
+        "dependsOn": [
+          {
+            "activity": "StartIngestRun",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "userProperties": [],
+        "typeProperties": {
+          "expression": {
+            "value": "@or(equals(variables('HasMorePages'), false), greaterOrEquals(variables('CurrentPage'), 100))",
+            "type": "Expression"
+          },
+          "activities": [
+            {
+              "name": "CopyVincereDataPage",
+              "type": "Copy",
+              "dependsOn": [],
+              "policy": {
+                "timeout": "0.00:10:00",
+                "retry": 3,
+                "retryIntervalInSeconds": 60
+              },
+              "typeProperties": {
+                "source": {
+                  "type": "RestSource",
+                  "httpRequestTimeout": "00:05:00",
+                  "requestInterval": "00:00:01",
+                  "additionalHeaders": {
+                    "Accept": "application/json"
+                  }
+                },
+                "sink": {
+                  "type": "LakehouseSink",
+                  "writeBehavior": "append",
+                  "fileFormat": "parquet"
+                },
+                "enableStaging": false,
+                "parallelCopies": 1
+              },
+              "inputs": [
+                {
+                  "referenceName": "VincereRestAPI",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "relativeUrl": {
+                      "value": "@{activity('GetEndpointConfig').output.firstRow.path}?q=@{activity('GetEndpointConfig').output.firstRow.base_filter_q}%23@{activity('GetEndpointConfig').output.firstRow.incr_field}:[@{activity('GetWatermark').output.firstRow.watermark_value} TO *]&limit=@{activity('GetEndpointConfig').output.firstRow.page_size}&start=@{variables('CurrentStart')}",
+                      "type": "Expression"
+                    },
+                    "tenantHost": "@{pipeline().parameters.tenantHost}"
+                  }
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "LakehouseBronze",
+                  "type": "DatasetReference",
+                  "parameters": {
+                    "folderPath": {
+                      "value": "vincere/@{pipeline().parameters.tenantHost}/candidates/@{formatDateTime(utcnow(), 'yyyy/MM/dd')}",
+                      "type": "Expression"
+                    },
+                    "fileName": {
+                      "value": "@{pipeline().RunId}_page_@{variables('CurrentPage')}.parquet",
+                      "type": "Expression"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "name": "CheckIfMorePages",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "CopyVincereDataPage",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "variableName": "HasMorePages",
+                "value": {
+                  "value": "@less(activity('CopyVincereDataPage').output.rowsRead, activity('GetEndpointConfig').output.firstRow.page_size)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "IncrementPage",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "CheckIfMorePages",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "variableName": "CurrentPage",
+                "value": {
+                  "value": "@add(variables('CurrentPage'), 1)",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "IncrementStart",
+              "type": "SetVariable",
+              "dependsOn": [
+                {
+                  "activity": "IncrementPage",
+                  "dependencyConditions": ["Succeeded"]
+                }
+              ],
+              "typeProperties": {
+                "variableName": "CurrentStart",
+                "value": {
+                  "value": "@add(variables('CurrentStart'), activity('GetEndpointConfig').output.firstRow.page_size)",
+                  "type": "Expression"
+                }
+              }
+            }
+          ],
+          "timeout": "0.02:00:00"
+        }
+      },
+      {
+        "name": "ComputeNewWatermark",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "PaginationLoop",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "LakehouseSource",
+            "query": {
+              "value": "SELECT MAX(@{activity('GetEndpointConfig').output.firstRow.incr_field}) AS new_watermark FROM lakehouse.bronze.vincere_candidates WHERE run_id = '@{pipeline().RunId}'",
+              "type": "Expression"
+            }
+          },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "UpdateWatermark",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "ComputeNewWatermark",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "UPDATE dbo.ingest_watermarks SET watermark_value = '@{activity('ComputeNewWatermark').output.firstRow.new_watermark}', last_run_utc = SYSUTCDATETIME(), status = 'success', updated_at = SYSUTCDATETIME() WHERE endpoint_key = '@{activity('GetEndpointConfig').output.firstRow.endpoint_key}' AND tenant = '@{pipeline().parameters.tenantHost}';",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "CompleteIngestRun",
+        "type": "Script",
+        "dependsOn": [
+          {
+            "activity": "UpdateWatermark",
+            "dependencyConditions": ["Succeeded"]
+          }
+        ],
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "Query",
+              "text": {
+                "value": "UPDATE dbo.ingest_runs SET ended_utc = SYSUTCDATETIME(), pages_read = @{variables('CurrentPage')}, status = 'success', watermark_after = '@{activity('ComputeNewWatermark').output.firstRow.new_watermark}' WHERE pipeline_run_id = '@{pipeline().RunId}';",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "parameters": {
+      "tenantHost": {
+        "type": "string",
+        "defaultValue": "ecigroup.vincere.io"
+      }
+    },
+    "variables": {
+      "CurrentPage": {
+        "type": "Integer",
+        "defaultValue": 0
+      },
+      "CurrentStart": {
+        "type": "Integer",
+        "defaultValue": 0
+      },
+      "HasMorePages": {
+        "type": "Boolean",
+        "defaultValue": true
+      }
+    },
+    "annotations": [],
+    "lastPublishTime": "2025-01-01T00:00:00Z"
+  },
+  "type": "Microsoft.DataFactory/factories/pipelines"
+}
+
