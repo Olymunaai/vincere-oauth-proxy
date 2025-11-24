@@ -72,7 +72,7 @@ export function createApp() {
   app.use(requestTimeout(100000)); // 100 seconds
 
   // Health check endpoint (no auth required)
-  app.get('/healthz', (req: Request, res: Response) => {
+  app.get('/healthz', (_req: Request, res: Response) => {
     res.status(200).json({
       status: 'ok',
       timeUtc: new Date().toISOString(),

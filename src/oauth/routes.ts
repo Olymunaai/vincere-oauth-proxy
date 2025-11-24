@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { config } from '../config/index.js';
-import { logger, createRequestLogger } from '../infra/logger.js';
+import { createRequestLogger } from '../infra/logger.js';
 import { trackEvent } from '../infra/appInsights.js';
 import { validateTenantHost, validateOAuthState, validateAuthCode } from '../security/validators.js';
 import {

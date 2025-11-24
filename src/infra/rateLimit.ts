@@ -7,7 +7,7 @@ export const authRateLimiter = rateLimit({
   message: { error: 'Too many authentication requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
+  handler: (_req, res) => {
     res.status(429).json({
       error: 'Too many authentication requests from this IP, please try again later',
     });
@@ -21,7 +21,7 @@ export const proxyRateLimiter = rateLimit({
   message: { error: 'Too many requests, please try again later' },
   standardHeaders: true,
   legacyHeaders: false,
-  handler: (req, res) => {
+  handler: (_req, res) => {
     res.status(429).json({
       error: 'Rate limit exceeded, please try again later',
     });
