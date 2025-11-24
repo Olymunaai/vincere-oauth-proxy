@@ -153,9 +153,10 @@ resource webApp 'Microsoft.Web/sites@2022-09-01' = {
         }
         {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'true'
+          value: 'false'
         }
       ]
+      appCommandLine: 'node dist/server.js'
     }
   }
 }
@@ -226,9 +227,10 @@ resource stagingSlot 'Microsoft.Web/sites/slots@2022-09-01' = if (enableStagingS
         }
         {
           name: 'SCM_DO_BUILD_DURING_DEPLOYMENT'
-          value: 'true'
+          value: 'false'
         }
       ]
+      appCommandLine: 'node dist/server.js'
     }
   }
 }

@@ -56,6 +56,10 @@ jobs:
         run: |
           echo "Verifying deployment package structure..."
           ls -la deploy/
+          echo "--- Contents of deploy/ ---"
+          find deploy -type f -name "*.json" -o -name "*.js" | head -20
+          echo "--- Package.json content ---"
+          cat deploy/package.json
           test -f deploy/package.json || (echo "ERROR: package.json missing" && exit 1)
           test -d deploy/dist || (echo "ERROR: dist directory missing" && exit 1)
           test -d deploy/node_modules || (echo "ERROR: node_modules directory missing" && exit 1)
