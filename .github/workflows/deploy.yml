@@ -39,11 +39,27 @@ jobs:
       - name: Build application
         run: npm run build
 
-      - name: Create deployment package
+      - name: Prepare deployment package
         run: |
-          cp package*.json dist/
-          cd dist
-          npm ci --production
+          # Create a clean deployment directory
+          mkdir -p deploy
+          # Copy built application
+          cp -r dist deploy/
+          # Copy package files
+          cp package*.json deploy/
+          # Install production dependencies in deploy folder
+          cd deploy
+          npm ci --production --ignore-scripts
+          cd ..
+          
+      - name: Verify deployment package
+        run: |
+          echo "Verifying deployment package structure..."
+          ls -la deploy/
+          test -f deploy/package.json || (echo "ERROR: package.json missing" && exit 1)
+          test -d deploy/dist || (echo "ERROR: dist directory missing" && exit 1)
+          test -d deploy/node_modules || (echo "ERROR: node_modules directory missing" && exit 1)
+          echo "✓ Deployment package structure verified"
 
       - name: Azure Login (OIDC)
         uses: azure/login@v2
@@ -55,13 +71,18 @@ jobs:
       - name: Set environment variables
         id: vars
         run: |
-          if [ "${{ github.event.inputs.environment }}" = "dev" ]; then
+          ENV="${{ github.event.inputs.environment }}"
+          if [ -z "$ENV" ]; then
+            ENV="prod"
+          fi
+          if [ "$ENV" = "dev" ]; then
             echo "PARAMS_FILE=params.dev.json" >> $GITHUB_OUTPUT
             echo "ENV_NAME=dev" >> $GITHUB_OUTPUT
           else
             echo "PARAMS_FILE=params.prod.json" >> $GITHUB_OUTPUT
             echo "ENV_NAME=prod" >> $GITHUB_OUTPUT
           fi
+          echo "Deploying to environment: $ENV"
 
       - name: Deploy infrastructure
         id: infra
@@ -78,7 +99,7 @@ jobs:
         with:
           app-name: ${{ steps.infra.outputs.webAppName }}
           slot-name: staging
-          package: ./dist
+          package: ./deploy
 
       - name: Wait for staging to warm up
         run: sleep 30
