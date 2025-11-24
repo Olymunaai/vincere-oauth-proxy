@@ -38,7 +38,10 @@ param skipRoleAssignments bool = false
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var appServicePlanName = '${namePrefix}-plan-${environment}'
 var webAppName = '${namePrefix}-app-${environment}-${uniqueSuffix}'
-var keyVaultName = '${namePrefix}-kv-${uniqueSuffix}'
+// Key Vault name must be 3-24 chars: truncate uniqueSuffix to fit
+// "vincere-proxy-kv-" = 17 chars, so we have 7 chars for suffix (24-17=7)
+var keyVaultSuffix = substring(uniqueSuffix, 0, min(7, length(uniqueSuffix)))
+var keyVaultName = '${namePrefix}-kv-${keyVaultSuffix}'
 var appInsightsName = '${namePrefix}-ai-${environment}'
 var workspaceName = '${namePrefix}-law-${environment}'
 var stagingSlotName = 'staging'
@@ -264,7 +267,7 @@ resource keyVaultRoleAssignmentWebApp 'Microsoft.Authorization/roleAssignments@2
 }
 
 // RBAC: Key Vault Secrets User role for Staging Slot
-resource keyVaultRoleAssignmentStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableStagingSlot && !skipRoleAssignments) {
+resource keyVaultRoleAssignmentStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableStagingSlot && !skipRoleAssignments && stagingSlot != null) {
   name: guid(keyVault.id, stagingSlot.id, 'Key Vault Secrets User')
   scope: keyVault
   properties: {
