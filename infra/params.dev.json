@@ -34,6 +34,9 @@
     },
     "requirePsk": {
       "value": false
+    },
+    "skipRoleAssignments": {
+      "value": true
     }
   }
 }

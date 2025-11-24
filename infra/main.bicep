@@ -31,6 +31,9 @@ param allowedIps string = ''
 @description('Require pre-shared key')
 param requirePsk bool = false
 
+@description('Skip RBAC role assignments (set to true if service principal lacks User Access Administrator role)')
+param skipRoleAssignments bool = false
+
 // Variables
 var uniqueSuffix = uniqueString(resourceGroup().id)
 var appServicePlanName = '${namePrefix}-plan-${environment}'
@@ -250,7 +253,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-02-01' = {
 }
 
 // RBAC: Key Vault Secrets User role for Web App
-resource keyVaultRoleAssignmentWebApp 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+resource keyVaultRoleAssignmentWebApp 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (!skipRoleAssignments) {
   name: guid(keyVault.id, webApp.id, 'Key Vault Secrets User')
   scope: keyVault
   properties: {
@@ -261,12 +264,12 @@ resource keyVaultRoleAssignmentWebApp 'Microsoft.Authorization/roleAssignments@2
 }
 
 // RBAC: Key Vault Secrets User role for Staging Slot
-resource keyVaultRoleAssignmentStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableStagingSlot) {
+resource keyVaultRoleAssignmentStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableStagingSlot && !skipRoleAssignments) {
   name: guid(keyVault.id, stagingSlot.id, 'Key Vault Secrets User')
   scope: keyVault
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
-    principalId: enableStagingSlot ? stagingSlot.identity.principalId : ''
+    principalId: stagingSlot.identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -283,5 +286,6 @@ output appInsightsName string = appInsights.name
 output workspaceName string = workspace.name
 output resourceGroupName string = resourceGroup().name
 output webAppPrincipalId string = webApp.identity.principalId
-output stagingSlotPrincipalId string = enableStagingSlot ? stagingSlot.identity.principalId : ''
+output stagingSlotPrincipalId string = enableStagingSlot && stagingSlot != null ? stagingSlot.identity.principalId : ''
+output roleAssignmentNote string = skipRoleAssignments ? 'Role assignments were skipped. Manually assign "Key Vault Secrets User" role to the web app and staging slot principals on the Key Vault.' : 'Role assignments completed automatically.'
 
