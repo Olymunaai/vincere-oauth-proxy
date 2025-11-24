@@ -269,12 +269,14 @@ resource keyVaultRoleAssignmentWebApp 'Microsoft.Authorization/roleAssignments@2
 }
 
 // RBAC: Key Vault Secrets User role for Staging Slot
+@description('Role assignment for staging slot (only created if staging slot is enabled)')
 resource keyVaultRoleAssignmentStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableStagingSlot && !skipRoleAssignments) {
   name: guid(keyVault.id, stagingSlot.id, 'Key Vault Secrets User')
   scope: keyVault
   properties: {
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6') // Key Vault Secrets User
-    principalId: stagingSlot.identity.principalId
+    // Note: stagingSlot is guaranteed to exist here because enableStagingSlot is true
+    principalId: any(stagingSlot).identity.principalId
     principalType: 'ServicePrincipal'
   }
 }
@@ -292,6 +294,6 @@ output workspaceName string = workspace.name
 output resourceGroupName string = resourceGroup().name
 output webAppPrincipalId string = webApp.identity.principalId
 @description('Staging slot principal ID (empty if staging slot is disabled)')
-output stagingSlotPrincipalId string = enableStagingSlot ? stagingSlot.identity.principalId : ''
+output stagingSlotPrincipalId string = enableStagingSlot ? any(stagingSlot).identity.principalId : ''
 output roleAssignmentNote string = skipRoleAssignments ? 'Role assignments were skipped. Manually assign "Key Vault Secrets User" role to the web app and staging slot principals on the Key Vault.' : 'Role assignments completed automatically.'
 
