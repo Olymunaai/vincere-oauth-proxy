@@ -267,7 +267,7 @@ resource keyVaultRoleAssignmentWebApp 'Microsoft.Authorization/roleAssignments@2
 }
 
 // RBAC: Key Vault Secrets User role for Staging Slot
-resource keyVaultRoleAssignmentStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableStagingSlot && !skipRoleAssignments && stagingSlot != null) {
+resource keyVaultRoleAssignmentStaging 'Microsoft.Authorization/roleAssignments@2022-04-01' = if (enableStagingSlot && !skipRoleAssignments) {
   name: guid(keyVault.id, stagingSlot.id, 'Key Vault Secrets User')
   scope: keyVault
   properties: {
@@ -289,6 +289,6 @@ output appInsightsName string = appInsights.name
 output workspaceName string = workspace.name
 output resourceGroupName string = resourceGroup().name
 output webAppPrincipalId string = webApp.identity.principalId
-output stagingSlotPrincipalId string = enableStagingSlot && stagingSlot != null ? stagingSlot.identity.principalId : ''
+output stagingSlotPrincipalId string = enableStagingSlot ? stagingSlot.identity.principalId : ''
 output roleAssignmentNote string = skipRoleAssignments ? 'Role assignments were skipped. Manually assign "Key Vault Secrets User" role to the web app and staging slot principals on the Key Vault.' : 'Role assignments completed automatically.'
 
