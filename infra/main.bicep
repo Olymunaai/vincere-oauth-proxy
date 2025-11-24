@@ -291,6 +291,7 @@ output appInsightsName string = appInsights.name
 output workspaceName string = workspace.name
 output resourceGroupName string = resourceGroup().name
 output webAppPrincipalId string = webApp.identity.principalId
+@description('Staging slot principal ID (empty if staging slot is disabled)')
 output stagingSlotPrincipalId string = enableStagingSlot ? stagingSlot.identity.principalId : ''
 output roleAssignmentNote string = skipRoleAssignments ? 'Role assignments were skipped. Manually assign "Key Vault Secrets User" role to the web app and staging slot principals on the Key Vault.' : 'Role assignments completed automatically.'
 
